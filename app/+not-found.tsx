@@ -1,11 +1,11 @@
-import React from "react";
+﻿import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 
 export default function NotFound() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Страницата не е намерена</Text>
-      <Text>Моля, върни се назад.</Text>
+      <Text style={styles.title}>РЎС‚СЂР°РЅРёС†Р°С‚Р° РЅРµ Рµ РЅР°РјРµСЂРµРЅР°</Text>
+      <Text>РњРѕР»СЏ, РІСЉСЂРЅРё СЃРµ РЅР°Р·Р°Рґ.</Text>
     </View>
   );
 }

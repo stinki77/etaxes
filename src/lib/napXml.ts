@@ -1,22 +1,17 @@
+// src/lib/napXml.ts
 /**
- * Прост XML генератор за декларация към НАП.
- * Този модул генерира валиден UTF-8 XML стринг с базови namespaces.
- *
- * IMPORTANT:
- * - Прегледайте и адаптирайте имената на елементи, namespaces и структурите според официалната XSD/спецификация на НАП.
- * - Тук използвам ръчно ескейпване. За production използвайте XML библиотека (xmlbuilder2, fast-xml-builder) и валидирайте срещу XSD.
+ * Генератор на XML за НАП + адаптер от store типове.
+ * ВНИМАНИЕ: Имената/namespace са примерни. Напасни към официалната XSD.
  */
+import type { Income, Deduction } from "./store";
+import type { Person } from "../config/nap";
 
-type IncomeLine = {
-  code: string;
-  description?: string;
-  amount: number;
-};
-
+// -------- Общи помощни --------
+type IncomeLine = { code: string; description?: string; amount: number };
 type Payload = {
   meta: { generatedAt: string; app?: string; version?: string };
-  taxpayer: { egn: string };
-  payment: { iban: string; reason: string };
+  taxpayer: { egn?: string; lnch?: string };
+  payment: { iban?: string; reason?: string };
   year: number | string;
   income?: IncomeLine[];
   deductions?: any[];
@@ -34,15 +29,19 @@ function esc(s: any) {
     .replace(/'/g, "&apos;");
 }
 
-export function generateNapXml(payload: Payload): string {
-  // Basic namespaces used as example. Replace with actual НАП namespaces.
-  const ns = {
-    xsi: "http://www.w3.org/2001/XMLSchema-instance",
-    nap: "http://nap.bg/declaration",
-  };
+function n2(v: any): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
 
+function f2(v: any): string {
+  return n2(v).toFixed(2);
+}
+
+// -------- Твоят оригинален генератор (преименуван) --------
+export function generateNapXmlRaw(payload: Payload): string {
+  const ns = { xsi: "http://www.w3.org/2001/XMLSchema-instance", nap: "http://nap.bg/declaration" };
   const header = `<?xml version="1.0" encoding="UTF-8"?>`;
-  // Root element with namespaces
   let xml = `${header}\n<nap:Declaration xmlns:nap="${ns.nap}" xmlns:xsi="${ns.xsi}">\n`;
 
   xml += `  <nap:Meta>\n`;
@@ -52,12 +51,13 @@ export function generateNapXml(payload: Payload): string {
   xml += `  </nap:Meta>\n`;
 
   xml += `  <nap:Taxpayer>\n`;
-  xml += `    <nap:EGN>${esc(payload.taxpayer?.egn)}</nap:EGN>\n`;
+  if (payload.taxpayer?.egn) xml += `    <nap:EGN>${esc(payload.taxpayer.egn)}</nap:EGN>\n`;
+  if (payload.taxpayer?.lnch) xml += `    <nap:LNCh>${esc(payload.taxpayer.lnch)}</nap:LNCh>\n`;
   xml += `  </nap:Taxpayer>\n`;
 
   xml += `  <nap:Payment>\n`;
-  xml += `    <nap:IBAN>${esc(payload.payment?.iban)}</nap:IBAN>\n`;
-  xml += `    <nap:Reason>${esc(payload.payment?.reason)}</nap:Reason>\n`;
+  xml += `    <nap:IBAN>${esc(payload.payment?.iban || "")}</nap:IBAN>\n`;
+  xml += `    <nap:Reason>${esc(payload.payment?.reason || "")}</nap:Reason>\n`;
   xml += `  </nap:Payment>\n`;
 
   xml += `  <nap:Year>${esc(payload.year)}</nap:Year>\n`;
@@ -68,7 +68,7 @@ export function generateNapXml(payload: Payload): string {
       xml += `    <nap:Income>\n`;
       xml += `      <nap:Code>${esc(line.code)}</nap:Code>\n`;
       xml += `      <nap:Description>${esc(line.description || "")}</nap:Description>\n`;
-      xml += `      <nap:Amount>${Number(line.amount).toFixed(2)}</nap:Amount>\n`;
+      xml += `      <nap:Amount>${f2(line.amount)}</nap:Amount>\n`;
       xml += `    </nap:Income>\n`;
     }
     xml += `  </nap:IncomeList>\n`;
@@ -85,7 +85,7 @@ export function generateNapXml(payload: Payload): string {
   if (payload.totals) {
     xml += `  <nap:Totals>\n`;
     for (const k of Object.keys(payload.totals)) {
-      xml += `    <nap:${esc(k)}>${Number(payload.totals[k]).toFixed(2)}</nap:${esc(k)}>\n`;
+      xml += `    <nap:${esc(k)}>${f2(payload.totals[k])}</nap:${esc(k)}>\n`;
     }
     xml += `  </nap:Totals>\n`;
   }
@@ -105,5 +105,74 @@ export function generateNapXml(payload: Payload): string {
   return xml;
 }
 
-// default export for convenience
+// -------- Адаптер: store -> Payload --------
+function incomeTypeToCode(t: Income["incomeType"] | undefined): string {
+  // Подравнено към тестовете: employment -> "01"
+  switch (t) {
+    case "employment": return "01";
+    case "civil": return "02";
+    case "rent": return "03";
+    default: return "99";
+  }
+}
+
+function buildDescription(it: Income): string {
+  const parts = [
+    it.description || "",
+    it.payerName ? `Платец: ${it.payerName}` : "",
+    it.payerEik ? `ЕИК: ${it.payerEik}` : "",
+    it.countryCode ? `Държава: ${it.countryCode}` : "",
+    it.docType || it.docNo || it.docDate
+      ? `Док.: ${[it.docType, it.docNo, it.docDate].filter(Boolean).join(" / ")}`
+      : "",
+  ].filter(Boolean);
+  return parts.join(" | ");
+}
+
+/**
+ * Исканата сигнатура за декларацията:
+ * generateNapXml({ year, incomes, deductions, person }) => string(XML)
+ * Дефанзивна към липсващи полета (tests могат да подават непълни данни).
+ */
+export function generateNapXml(p: {
+  year?: number;
+  incomes?: Income[];
+  deductions?: Deduction[];
+  person?: Person;
+}): string {
+  const year = p?.year ?? new Date().getFullYear();
+
+  const person: Person = p?.person ?? ({
+    egn: "",
+    lnch: "",
+    refundIban: "",
+  } as Person);
+
+  const incomes: Income[] = Array.isArray(p?.incomes) ? p!.incomes! : [];
+  const deductions: Deduction[] = Array.isArray(p?.deductions) ? p!.deductions! : [];
+
+  const totalIncome = incomes.reduce((s, x) => s + n2(x.amount), 0);
+  const totalReliefs = deductions.reduce((s, x) => s + n2((x as any).amount), 0);
+
+  const payload: Payload = {
+    meta: { generatedAt: new Date().toISOString(), app: "eTaxes", version: "1.0" },
+    taxpayer: { egn: person.egn, lnch: person.lnch },
+    payment: { iban: person.refundIban, reason: `ГДД ${year}` },
+    year,
+    income: incomes.map<IncomeLine>((it) => ({
+      code: incomeTypeToCode(it.incomeType),
+      description: buildDescription(it),
+      amount: n2(it.amount),
+    })),
+    deductions: deductions.map((d) => ({
+      name: (d as any).name,
+      amount: n2((d as any).amount),
+    })),
+    totals: { IncomeTotal: totalIncome, ReliefsTotal: totalReliefs },
+  };
+
+  return generateNapXmlRaw(payload);
+}
+
+// default: удобен импорт
 export default generateNapXml;
