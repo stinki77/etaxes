@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // src/lib/tax.ts
+=======
+// src/lib/tax.ts 
+>>>>>>> restore/all
 export type TaxInputs = {
   income: number;
   normativePercent?: number; // в проценти, напр. 20
@@ -25,10 +29,24 @@ function round2(n: number) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+<<<<<<< HEAD
+=======
+/** Безопасно число (NaN/undefined -> default) */
+function toNum(v: unknown, def = 0): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+}
+/** Неотрицателно число */
+function nonNeg(n: number): number {
+  return n >= 0 ? n : 0;
+}
+
+>>>>>>> restore/all
 /**
  * calculateTax - чиста функция за данъчни калкулации
  *
  * Правила:
+<<<<<<< HEAD
  * - нормативPercent и socialPercent са проценти (0..)
  * - ако резултатът за облагане е < 0 -> клmp до 0
  * - всички изходни полета са закръглени до 2 десетични
@@ -42,6 +60,25 @@ export function calculateTax(inputs: TaxInputs): TaxResult {
 
   const normativeAmountRaw = (income * normativePercent) / 100;
   const socialAmountRaw = (income * socialPercent) / 100;
+=======
+ * - normativePercent и socialPercent са проценти (0..)
+ * - ако резултатът за облагане е < 0 -> clamp до 0
+ * - всички изходни полета са закръглени до 2 десетични
+ * - за проценти и удръжки не използваме отрицателна база
+ */
+export function calculateTax(inputs: TaxInputs): TaxResult {
+  const income = toNum(inputs.income, 0);
+  const normativePercent = nonNeg(toNum(inputs.normativePercent, 0));
+  const socialPercent = nonNeg(toNum(inputs.socialPercent, 0));
+  const deductions = nonNeg(toNum(inputs.deductions, 0));
+  const taxRate = nonNeg(toNum(inputs.taxRate, 0.1));
+
+  // Процентите се прилагат върху неотрицателна база
+  const baseForPerc = Math.max(0, income);
+  const normativeAmountRaw = (baseForPerc * normativePercent) / 100;
+  const socialAmountRaw = (baseForPerc * socialPercent) / 100;
+
+>>>>>>> restore/all
   const taxableRaw = income - normativeAmountRaw - socialAmountRaw - deductions;
   const taxable = taxableRaw > 0 ? taxableRaw : 0;
 

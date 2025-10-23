@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { useEffect } from 'react';
+=======
+﻿import { useEffect } from 'react';
+>>>>>>> restore/all
 import { StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -26,7 +30,11 @@ export function HelloWave() {
 
   return (
     <Animated.View style={animatedStyle}>
+<<<<<<< HEAD
       <ThemedText style={styles.text}>👋</ThemedText>
+=======
+      <ThemedText style={styles.text}>рџ‘‹</ThemedText>
+>>>>>>> restore/all
     </Animated.View>
   );
 }

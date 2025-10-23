@@ -1,0 +1,12 @@
+﻿module.exports = {
+  preset: "jest-expo",
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
+  transformIgnorePatterns: [
+    "node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo|expo-modules-core)/)"
+  ],
+  testPathIgnorePatterns: ["/node_modules/", "/android/", "/ios/"],
+  testEnvironment: "node",
+  moduleNameMapper: {
+    "^expo-modules-core/src/Refs$": "<rootDir>/node_modules/expo-modules-core/src/Refs.js"
+  }
+};
