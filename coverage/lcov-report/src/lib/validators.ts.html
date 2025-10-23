@@ -23,30 +23,54 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
+<<<<<<< HEAD
                 <span class="strong">0% </span>
                 <span class="quiet">Statements</span>
                 <span class='fraction'>0/31</span>
+=======
+                <span class="strong">38.7% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>12/31</span>
+>>>>>>> 812ffc7 (pre-upgrade backup)
             </div>
         
             
             <div class='fl pad1y space-right2'>
+<<<<<<< HEAD
                 <span class="strong">0% </span>
                 <span class="quiet">Branches</span>
                 <span class='fraction'>0/17</span>
+=======
+                <span class="strong">35.29% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>6/17</span>
+>>>>>>> 812ffc7 (pre-upgrade backup)
             </div>
         
             
             <div class='fl pad1y space-right2'>
+<<<<<<< HEAD
                 <span class="strong">0% </span>
                 <span class="quiet">Functions</span>
                 <span class='fraction'>0/6</span>
+=======
+                <span class="strong">66.66% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>4/6</span>
+>>>>>>> 812ffc7 (pre-upgrade backup)
             </div>
         
             
             <div class='fl pad1y space-right2'>
+<<<<<<< HEAD
                 <span class="strong">0% </span>
                 <span class="quiet">Lines</span>
                 <span class='fraction'>0/23</span>
+=======
+                <span class="strong">43.47% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>10/23</span>
+>>>>>>> 812ffc7 (pre-upgrade backup)
             </div>
         
             
@@ -138,6 +162,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<<<<<<< HEAD
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
@@ -152,6 +177,22 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
+=======
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+>>>>>>> 812ffc7 (pre-upgrade backup)
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
  * Прост набор от валидатори, използвани от submit.tsx и другите екрани.
@@ -182,6 +223,7 @@ export function <span class="fstat-no" title="function not covered" >validateIBA
 <span class="cstat-no" title="statement not covered" >  return remainder === 1;</span>
 }
 &nbsp;
+<<<<<<< HEAD
 export function <span class="fstat-no" title="function not covered" >validateEGN(</span>egn: string): boolean {
 <span class="cstat-no" title="statement not covered" >  if (!egn) <span class="cstat-no" title="statement not covered" >return false;</span></span>
   const cleaned = <span class="cstat-no" title="statement not covered" >egn.replace(/\s+/g, "");</span>
@@ -197,6 +239,23 @@ export function <span class="fstat-no" title="function not covered" >validateEGN
 &nbsp;
 export function <span class="fstat-no" title="function not covered" >isPositiveNumber(</span>n: number) {
 <span class="cstat-no" title="statement not covered" >  return typeof n === "number" &amp;&amp; isFinite(n) &amp;&amp; n &gt; 0;</span>
+=======
+export function validateEGN(egn: string): boolean {
+  <span class="missing-if-branch" title="if path not taken" >I</span>if (!egn) <span class="cstat-no" title="statement not covered" >return false;</span>
+  const cleaned = egn.replace(/\s+/g, "");
+  <span class="missing-if-branch" title="if path not taken" >I</span>if (!/^\d{10}$/.test(cleaned)) <span class="cstat-no" title="statement not covered" >return false;</span>
+  // Basic control digit check algorithm for Bulgarian EGN
+  const weights = [2, 4, 8, 5, 10, 9, 7, 3, 6];
+  const digits = cleaned.split("").map(d =&gt; Number(d));
+  const sum = weights.reduce((acc, w, i) =&gt; acc + w * digits[i], 0);
+  const remainder = sum % 11;
+  const check = remainder === 10 ? <span class="branch-0 cbranch-no" title="branch not covered" >0 </span>: remainder;
+  return check === digits[9];
+}
+&nbsp;
+export function isPositiveNumber(n: number) {
+  return typeof n === "number" &amp;&amp; isFinite(n) &amp;&amp; n &gt; 0;
+>>>>>>> 812ffc7 (pre-upgrade backup)
 }
 &nbsp;</pre></td></tr></table></pre>
 
@@ -205,7 +264,11 @@ export function <span class="fstat-no" title="function not covered" >isPositiveN
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+<<<<<<< HEAD
                 at 2025-10-22T11:45:43.641Z
+=======
+                at 2025-09-17T18:01:39.803Z
+>>>>>>> 812ffc7 (pre-upgrade backup)
             </div>
         <script src="../../prettify.js"></script>
         <script>

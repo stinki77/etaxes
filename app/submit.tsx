@@ -1,389 +1,267 @@
-// app/submit.tsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+﻿import React, { useMemo, useState } from "react";
 import {
-  Alert,
-  Linking,
-  ScrollView,
-  StyleSheet,
+  View,
   Text,
   TextInput,
+  Button,
+  ScrollView,
+  Alert,
   TouchableOpacity,
-  View,
+  Platform,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as DocumentPicker from "expo-document-picker";
 import * as Clipboard from "expo-clipboard";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system";
+import * as Linking from "expo-linking";
+import { useRouter, useSearchParams } from "expo-router";
+import { generateNapXml } from "../src/lib/napXml";
+import { saveToArchive as saveToLocalArchive } from "../src/lib/archive"; // implement in project
+import { t } from "../src/localization/i18n"; // project i18n function
+import { validateIBAN, validateEGN, isPositiveNumber } from "../src/lib/validators";
 
-import { Locale, getLocale, onLocaleChange, tSync } from "../src/localization";
-
-type Attach = { name: string; uri: string; size?: number | null; mime?: string | null };
-type SubmitState = {
-  year: string;
-  amount: string;     // сума за плащане (или 0.00 ако се възстановява)
-  iban: string;       // IBAN на НАП/ТД по подразбиране
-  reason: string;     // основание за плащане
-  napUrl: string;     // deep-link към услугата
-  note: string;
-  attachments: Attach[];
-  status: "Prepared" | "Submitted";
+type Attachment = {
+  name: string;
+  uri: string;
+  size?: number;
+  mimeType?: string;
 };
-
-type ArchiveEntry = {
-  id: string;
-  createdAt: number;
-  year: string;
-  amount: string;
-  status: "Prepared" | "Submitted";
-  iban: string;
-  reason: string;
-  note?: string;
-  attachments: Attach[];
-};
-
-const STORAGE_KEY = "@submit_screen_state_v1";
-const ARCHIVE_KEY = "@archive_entries_v1";
-
-// разумни BG дефолти (редактирай според твоя ТД на НАП при нужда)
-const DEFAULTS_BG = {
-  IBAN: "BG18 BNBG 9661 3100 1010 01", // примерен, смени с реалния за ТД по адресна регистрация
-  REASON: "ЗДДФЛ {{year}} ЕГН/ЛНЧ: ...",
-  NAP_URL: "https://portal.nra.bg/",
-};
-
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
 
 export default function SubmitScreen() {
-  const [lng, setLng] = useState<Locale>("bg");
-  const [state, setState] = useState<SubmitState>({
-    year: String(new Date().getFullYear()),
-    amount: "0.00",
-    iban: DEFAULTS_BG.IBAN,
-    reason: DEFAULTS_BG.REASON.replace("{{year}}", String(new Date().getFullYear())),
-    napUrl: DEFAULTS_BG.NAP_URL,
-    note: "",
-    attachments: [],
-    status: "Prepared",
-  });
+  const router = useRouter();
+  const params = useSearchParams(); // expecting payload params if any
+  const incomingPayload = (params.payload && JSON.parse(String(params.payload))) || null;
 
-  // локализация
-  useEffect(() => {
-    let unsub = () => {};
-    (async () => {
-      const cur = await getLocale();
-      setLng(cur);
-      unsub = onLocaleChange(setLng);
-    })();
-    return () => unsub();
+  const [iban, setIban] = useState<string>(incomingPayload?.payment?.iban || "");
+  const [reason, setReason] = useState<string>(incomingPayload?.payment?.reason || "");
+  const [egn, setEgn] = useState<string>(incomingPayload?.taxpayer?.egn || "");
+  const [year, setYear] = useState<number>(incomingPayload?.year || new Date().getFullYear());
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [xmlPreview, setXmlPreview] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const napPortalUrl = useMemo(() => {
+    // Deep-link template to НАП (example). Replace with real URL if needed.
+    return "https://inetdec.services.nap.bg/submit"; 
   }, []);
 
-  // хидратиране на формата
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) setState((s) => ({ ...s, ...(JSON.parse(raw) as SubmitState) }));
-      } catch {}
-    })();
-  }, []);
-  useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
-  }, [state]);
+  function showError(msg: string) {
+    Alert.alert(t("error") || "Error", msg);
+  }
 
-  // етикети
-  const L = useMemo(() => {
-    return {
-      title: lng === "bg" ? "Подпис и подаване" : "Sign and submit",
-      step1: lng === "bg" ? "1) Преглед и подготовка" : "1) Review and prepare",
-      step2: lng === "bg" ? "2) Подпис/Подаване към НАП" : "2) Sign/Submit to NRA",
-      step3: lng === "bg" ? "3) Архив и статус" : "3) Archive and status",
-      year: lng === "bg" ? "Година" : "Year",
-      amount: lng === "bg" ? "Сума за плащане" : "Amount to pay",
-      iban: "IBAN",
-      reason: lng === "bg" ? "Основание" : "Reason",
-      napUrl: lng === "bg" ? "Линк към услуга на НАП" : "NRA service link",
-      note: lng === "bg" ? "Бележка" : "Note",
-      attach: lng === "bg" ? "Прикачи файл" : "Attach file",
-      copy: lng === "bg" ? "Копирай" : "Copy",
-      openNap: lng === "bg" ? "Отвори услугата на НАП" : "Open NRA service",
-      saveArchive: lng === "bg" ? "Запази в Архив" : "Save to Archive",
-      markSubmitted: lng === "bg" ? "Маркирай като Подадено" : "Mark as Submitted",
-      saved: lng === "bg" ? "Записано" : "Saved",
-      copied: lng === "bg" ? "Копирано" : "Copied",
-      attachAdded: lng === "bg" ? "Файл добавен" : "File added",
-      amountHint:
-        lng === "bg"
-          ? "Ако се възстановява, остави 0.00 и опиши в бележката."
-          : "If refund is due, leave 0.00 and add a note.",
-      status: lng === "bg" ? "Статус" : "Status",
-      prepared: lng === "bg" ? "Подготвено" : "Prepared",
-      submitted: lng === "bg" ? "Подадено" : "Submitted",
-    };
-  }, [lng]);
-
-  const setField = useCallback(<K extends keyof SubmitState>(k: K, v: SubmitState[K]) => {
-    setState((s) => ({ ...s, [k]: v }));
-  }, []);
-
-  // действия
-  const copyText = useCallback(async (text: string, label: string) => {
+  async function pickAttachment() {
     try {
-      await Clipboard.setStringAsync(text);
-      Alert.alert(L.copied, label);
-    } catch {
-      Alert.alert(L.copied, label);
+      const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+      if (res.type === "success") {
+        const info: Attachment = {
+          name: res.name,
+          uri: res.uri,
+          size: res.size,
+          mimeType: res.mimeType,
+        };
+        setAttachments(prev => [...prev, info]);
+      }
+    } catch (e) {
+      console.warn("pickAttachment", e);
+      showError(t("attachment_pick_failed") || "Неуспешно прикачване на файл");
     }
-  }, [L]);
+  }
 
-  const openNap = useCallback(async () => {
-    const ok = await Linking.canOpenURL(state.napUrl);
-    if (!ok) {
-      Alert.alert("URL", state.napUrl);
+  async function copyToClipboard(text: string) {
+    await Clipboard.setStringAsync(text);
+    Alert.alert(t("copied") || "Копирано", t("copied_to_clipboard") || "Копирано в клипборд");
+  }
+
+  function validateAll(): boolean {
+    if (!iban) {
+      showError(t("iban_required") || "IBAN е задължителен");
+      return false;
+    }
+    if (!validateIBAN(iban)) {
+      showError(t("iban_invalid") || "Невалиден IBAN");
+      return false;
+    }
+    if (!reason) {
+      showError(t("reason_required") || "Основание е задължително");
+      return false;
+    }
+    if (!egn) {
+      showError(t("egn_required") || "ЕГН е задължително");
+      return false;
+    }
+    if (!validateEGN(egn)) {
+      showError(t("egn_invalid") || "Невалидно ЕГН");
+      return false;
+    }
+    if (!isPositiveNumber(Number(year))) {
+      showError(t("year_invalid") || "Невалидна година");
+      return false;
+    }
+    return true;
+  }
+
+  function buildDeclarationPayload() {
+    // Build a structured payload expected by napXml generator
+    return {
+      meta: {
+        generatedAt: new Date().toISOString(),
+        app: "eTaxes",
+        version: "1.0",
+      },
+      taxpayer: {
+        egn,
+      },
+      payment: {
+        iban,
+        reason,
+      },
+      year,
+      attachments: attachments.map(a => ({ name: a.name, uri: a.uri })),
+      income: incomingPayload?.income || [],
+      deductions: incomingPayload?.deductions || [],
+      totals: incomingPayload?.totals || {},
+    };
+  }
+
+  async function onGenerateXml() {
+    if (!validateAll()) return;
+    const payload = buildDeclarationPayload();
+    try {
+      const xml = generateNapXml(payload);
+      setXmlPreview(xml);
+      // save a temp file for sharing/downloading
+      const path = `${FileSystem.cacheDirectory}declaration-${Date.now()}.xml`;
+      await FileSystem.writeAsStringAsync(path, xml, { encoding: FileSystem.EncodingType.UTF8 });
+      Alert.alert(t("xml_generated") || "XML генериран", t("xml_saved_cache") || "XML записан във временни файлове");
+    } catch (e) {
+      console.error("XML generation error", e);
+      showError(t("xml_generation_failed") || "Грешка при генериране на XML");
+    }
+  }
+
+  async function onDownloadXml() {
+    if (!xmlPreview) {
+      showError(t("no_xml") || "Няма генериран XML. Натиснете 'Генерирай' първо.");
       return;
     }
-    await Linking.openURL(state.napUrl);
-  }, [state.napUrl]);
+    const filename = `declaration-${year}-${egn || "unknown"}.xml`;
+    const path = `${FileSystem.documentDirectory}${filename}`;
+    await FileSystem.writeAsStringAsync(path, xmlPreview, { encoding: FileSystem.EncodingType.UTF8 });
+    Alert.alert(t("xml_saved") || "XML запазен", `${t("file_saved_to") || "Файлът е записан в"}: ${path}`);
+    // On iOS/Android user can pick file via sharing if needed - leaving to platform to handle
+  }
 
-  const pickAttach = useCallback(async () => {
-    const res = await DocumentPicker.getDocumentAsync({
-      multiple: false,
-      copyToCacheDirectory: true,
+  async function onOpenNapPortal() {
+    if (!validateAll()) return;
+    const payload = buildDeclarationPayload();
+    const xml = generateNapXml(payload);
+    // Some portals accept prefilled params. We'll open portal and let user attach XML.
+    const url = napPortalUrl;
+    Linking.openURL(url).catch(() => {
+      showError(t("cannot_open_portal") || "Не мога да отворя портала на НАП");
     });
-    if (res.canceled || !res.assets?.length) return;
-    const a = res.assets[0];
-    const item: Attach = {
-      name: a.name ?? "file",
-      uri: a.uri,
-      size: a.size ?? null,
-      mime: a.mimeType ?? null,
-    };
-    setState((s) => ({ ...s, attachments: [...s.attachments, item] }));
-    Alert.alert(L.attachAdded, item.name);
-  }, [L.attachAdded]);
+  }
 
-  const persistArchive = useCallback(
-    async (markSubmitted?: boolean) => {
-      try {
-        const raw = await AsyncStorage.getItem(ARCHIVE_KEY);
-        const list: ArchiveEntry[] = raw ? JSON.parse(raw) : [];
-        const entry: ArchiveEntry = {
-          id: uid(),
-          createdAt: Date.now(),
-          year: state.year,
-          amount: state.amount || "0.00",
-          status: markSubmitted ? "Submitted" : state.status,
-          iban: state.iban,
-          reason: state.reason,
-          note: state.note,
-          attachments: state.attachments,
-        };
-        const updated =
-          markSubmitted
-            ? [...list, { ...entry, status: "Submitted" as const }]
-            : [...list, entry];
-        await AsyncStorage.setItem(ARCHIVE_KEY, JSON.stringify(updated));
-        if (markSubmitted) setState((s) => ({ ...s, status: "Submitted" }));
-        Alert.alert(L.saved, `${L.status}: ${markSubmitted ? L.submitted : L.prepared}`);
-      } catch (e: any) {
-        Alert.alert("Error", e?.message || "Archive error");
-      }
-    },
-    [state, L.saved, L.status, L.prepared, L.submitted]
-  );
+  async function onSaveToArchive() {
+    if (!validateAll()) return;
+    setSaving(true);
+    try {
+      const payload = buildDeclarationPayload();
+      const xml = generateNapXml(payload);
+      // archive entry: xml + metadata + attachments
+      const entry = {
+        id: `entry-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        egn,
+        year,
+        iban,
+        reason,
+        xml,
+        attachments,
+        status: "saved",
+      };
+      await saveToLocalArchive(entry); // implement persistence in project (AsyncStorage/SQLite)
+      Alert.alert(t("saved") || "Запазено", t("saved_to_archive") || "Декларацията е запазена в Архив");
+      router.back();
+    } catch (e) {
+      console.error("saveToArchive", e);
+      showError(t("archive_save_failed") || "Неуспешно запазване в Архив");
+    } finally {
+      setSaving(false);
+    }
+  }
 
-  // UI
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>{L.title}</Text>
+    <ScrollView style={{ padding: 16 }}>
+      <Text style={{ fontSize: 20, marginBottom: 12 }}>{t("submit_title") || "Подпис и подаване"}</Text>
 
-      {/* Стъпка 1 */}
-      <Text style={styles.step}>{L.step1}</Text>
-
-      <View style={styles.row2}>
-        <View style={styles.col}>
-          <Text style={styles.label}>{L.year}</Text>
-          <TextInput
-            value={state.year}
-            onChangeText={(v) => setField("year", v.replace(/\D/g, "").slice(0, 4))}
-            keyboardType="number-pad"
-            style={styles.input}
-            placeholder="2025"
-          />
-        </View>
-        <View style={styles.col}>
-          <Text style={styles.label}>{L.amount}</Text>
-          <TextInput
-            value={state.amount}
-            onChangeText={(v) => setField("amount", v.replace(",", "."))}
-            keyboardType="decimal-pad"
-            style={styles.input}
-            placeholder="0.00"
-          />
-          <Text style={styles.hint}>{L.amountHint}</Text>
-        </View>
-      </View>
-
-      <Text style={styles.label}>{L.note}</Text>
+      <Text>{t("egn") || "ЕГН"}</Text>
       <TextInput
-        value={state.note}
-        onChangeText={(v) => setField("note", v)}
-        style={styles.input}
-        placeholder={L.note}
+        placeholder={t("egn_placeholder") || "ЕГН"}
+        value={egn}
+        onChangeText={setEgn}
+        keyboardType="number-pad"
+        style={{ borderWidth: 1, padding: 8, marginBottom: 12 }}
       />
 
-      {/* Стъпка 2 */}
-      <Text style={styles.step}>{L.step2}</Text>
-
-      <Text style={styles.label}>{L.iban}</Text>
-      <View style={styles.rowBtn}>
-        <TextInput
-          value={state.iban}
-          onChangeText={(v) => setField("iban", v)}
-          style={[styles.input, { flex: 1 }]}
-          placeholder="BG.."
-          autoCapitalize="characters"
+      <Text>{t("iban") || "IBAN"}</Text>
+      <TextInput
+        placeholder={t("iban_placeholder") || "BG00XXXX..."}
+        value={iban}
+        onChangeText={setIban}
+        autoCapitalize="characters"
+        style={{ borderWidth: 1, padding: 8, marginBottom: 12 }}
+      />
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+        <Button title={t("copy_iban") || "Копирай IBAN"} onPress={() => copyToClipboard(iban)} />
+        <Button
+          title={t("check_iban") || "Провери IBAN"}
+          onPress={() => {
+            if (validateIBAN(iban)) Alert.alert(t("valid") || "Валиден");
+            else showError(t("iban_invalid") || "Невалиден IBAN");
+          }}
         />
-        <TouchableOpacity style={styles.copyBtn} onPress={() => copyText(state.iban, "IBAN")}>
-          <Text style={styles.copyBtnText}>{L.copy}</Text>
-        </TouchableOpacity>
       </View>
 
-      <Text style={styles.label}>{L.reason}</Text>
-      <View style={styles.rowBtn}>
-        <TextInput
-          value={state.reason}
-          onChangeText={(v) => setField("reason", v)}
-          style={[styles.input, { flex: 1 }]}
-          placeholder="Основание"
-        />
-        <TouchableOpacity style={styles.copyBtn} onPress={() => copyText(state.reason, "Reason")}>
-          <Text style={styles.copyBtnText}>{L.copy}</Text>
-        </TouchableOpacity>
-      </View>
+      <Text>{t("reason") || "Основание (reason)"}</Text>
+      <TextInput
+        placeholder={t("reason_placeholder") || "Основание"}
+        value={reason}
+        onChangeText={setReason}
+        style={{ borderWidth: 1, padding: 8, marginBottom: 12 }}
+      />
 
-      <Text style={styles.label}>{L.napUrl}</Text>
-      <View style={styles.rowBtn}>
-        <TextInput
-          value={state.napUrl}
-          onChangeText={(v) => setField("napUrl", v)}
-          style={[styles.input, { flex: 1 }]}
-          placeholder="https://portal.nra.bg/"
-          autoCapitalize="none"
-        />
-        <TouchableOpacity style={styles.openBtn} onPress={openNap}>
-          <Text style={styles.openBtnText}>{L.openNap}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Прикачвания */}
-      <View style={styles.attachHeader}>
-        <Text style={styles.section}>Прикачвания</Text>
-        <TouchableOpacity style={styles.attachBtn} onPress={pickAttach}>
-          <Text style={styles.attachBtnText}>{L.attach}</Text>
-        </TouchableOpacity>
-      </View>
-      {state.attachments.map((a, idx) => (
-        <View key={idx} style={styles.attachRow}>
-          <Text style={styles.attachName}>{a.name}</Text>
-          <Text style={styles.attachMeta}>
-            {a.size ? `${Math.round(a.size / 1024)} KB` : ""} {a.mime ? ` • ${a.mime}` : ""}
-          </Text>
+      <Text>{t("attachments") || "Прикачени файлове"}</Text>
+      {attachments.map((a, i) => (
+        <View key={a.uri} style={{ paddingVertical: 4 }}>
+          <Text>{a.name} ({a.size ?? "—"} bytes)</Text>
         </View>
       ))}
-
-      {/* Стъпка 3 */}
-      <Text style={styles.step}>{L.step3}</Text>
-      <View style={styles.actions}>
-        <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => persistArchive(false)}>
-          <Text style={styles.btnText}>{L.saveArchive}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.btn} onPress={() => persistArchive(true)}>
-          <Text style={styles.btnText}>{L.markSubmitted}</Text>
-        </TouchableOpacity>
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+        <Button title={t("attach_file") || "Прикачи файл"} onPress={pickAttachment} />
       </View>
 
-      <View style={{ height: 24 }} />
+      <View style={{ marginVertical: 8 }}>
+        <Button title={t("generate_xml") || "Генерирай XML"} onPress={onGenerateXml} />
+      </View>
+
+      <View style={{ marginVertical: 8 }}>
+        <Button title={t("download_xml") || "Изтегли XML"} onPress={onDownloadXml} />
+      </View>
+
+      <View style={{ marginVertical: 8 }}>
+        <Button title={t("open_nap") || "Отиди към портала на НАП"} onPress={onOpenNapPortal} />
+      </View>
+
+      <View style={{ marginVertical: 12 }}>
+        <Button title={t("save_to_archive") || "Запази в Архив"} onPress={onSaveToArchive} disabled={saving} />
+      </View>
+
+      <View style={{ marginTop: 20 }}>
+        <Text style={{ fontWeight: "600" }}>{t("preview") || "Преглед на декларацията (XML)"}</Text>
+        <Text selectable style={{ fontSize: 12, marginTop: 8 }}>
+          {xmlPreview || t("no_xml_preview") || "Няма генериран XML. Натиснете 'Генерирай XML'."}
+        </Text>
+      </View>
     </ScrollView>
   );
 }
-
-// стилове
-const styles = StyleSheet.create({
-  container: { padding: 16 },
-  title: { fontSize: 20, fontWeight: "700", marginBottom: 8, textAlign: "center" },
-
-  step: { marginTop: 18, marginBottom: 8, fontSize: 16, fontWeight: "700" },
-  section: { fontSize: 15, fontWeight: "700" },
-
-  row2: { flexDirection: "row", gap: 12 },
-  col: { flex: 1 },
-
-  label: { fontSize: 12, opacity: 0.8, marginBottom: 4 },
-  hint: { fontSize: 11, opacity: 0.7, marginTop: 4 },
-
-  input: {
-    borderWidth: 1,
-    borderColor: "#d0d0d0",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    backgroundColor: "#fff",
-  },
-
-  rowBtn: { flexDirection: "row", gap: 8, alignItems: "center", marginBottom: 8, marginTop: 2 },
-  copyBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#c8c8c8",
-    backgroundColor: "#f8fafc",
-  },
-  copyBtnText: { fontSize: 12, fontWeight: "700" },
-
-  openBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#e8f3ff",
-    borderWidth: 1,
-    borderColor: "#a0c8ff",
-  },
-  openBtnText: { fontSize: 12, fontWeight: "700" },
-
-  attachHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
-  attachBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#c8c8c8",
-    backgroundColor: "#f7faff",
-  },
-  attachBtnText: { fontSize: 12, fontWeight: "700" },
-
-  attachRow: {
-    borderWidth: 1,
-    borderColor: "#e5e5e5",
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 6,
-    backgroundColor: "#fff",
-  },
-  attachName: { fontSize: 14, fontWeight: "600" },
-  attachMeta: { fontSize: 12, opacity: 0.7, marginTop: 2 },
-
-  actions: { flexDirection: "row", gap: 12, marginTop: 12 },
-  btn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#c8c8c8",
-    alignItems: "center",
-  },
-  btnPrimary: { backgroundColor: "#e8f3ff", borderColor: "#a0c8ff" },
-  btnText: { fontSize: 14, fontWeight: "700" },
-});

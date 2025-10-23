@@ -1,5 +1,5 @@
-// app/(tabs)/create-tax.tsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+﻿// app/(tabs)/create-tax.tsx
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -10,454 +10,325 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  FlatList,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
-// @ts-ignore – декларация при нужда: declare module "xlsx";
-import * as XLSX from "xlsx";
-import { router } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
+import XLSX from "xlsx";
+import { parseAndStoreCsvText, loadImportedIncomesForYear, ImportedIncome } from "../../src/lib/csv";
 
-import {
-  Locale,
-  getLocale,
-  onLocaleChange,
-  tSync,
-} from "../../src/localization";
+export default function CreateTax() {
+  const [year, setYear] = useState<string>(new Date().getFullYear().toString());
+  const [manualIncome, setManualIncome] = useState<string>("");
+  const [importedTotal, setImportedTotal] = useState<number>(0);
+  const [importedItems, setImportedItems] = useState<ImportedIncome[]>([]);
+  const [normativePercent, setNormativePercent] = useState<string>("20");
+  const [socialPercent, setSocialPercent] = useState<string>("13.78");
+  const [deductions, setDeductions] = useState<string>("0");
+  const TAX_RATE = 0.1;
+  const [lastExportPath, setLastExportPath] = useState<string | null>(null);
 
-// ────────────────────────────────────────────────────────────────────────────────
-// Типове и ключове
-type FormState = {
-  year: string;               // 2025
-  totalIncome: number;        // общ доход
-  normExpensePct: number;     // нормативни разходи %
-  insurances: number;         // лични осигуровки (сума)
-  otherReliefs: number;       // други облекчения (сума)
-  taxRatePct: number;         // ставка %, по подразбиране 10
-  withheldAdvance: number;    // авансово удържан
-  note: string;               // бележка (незадължителна)
-};
+  useEffect(() => {
+    loadImportedIncomes();
+  }, [year]);
 
-const STORAGE_KEY = "@create_tax_calc_v1";
-
-// ────────────────────────────────────────────────────────────────────────────────
-// Помощни
-function num(v: string) {
-  const n = Number(v.replace?.(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
-function money(n: number) {
-  return (Math.round(n * 100) / 100).toFixed(2);
-}
-function clampMin0(n: number) {
-  return n < 0 ? 0 : n;
-}
-
-// Зарежда сумата от @income_sources_<year> ако има записи от екрана "Източници на доход"
-async function loadIncomeForYear(year: string): Promise<number> {
-  try {
-    const raw = await AsyncStorage.getItem(`@income_sources_${year}`);
-    if (!raw) return 0;
-    const items: Array<{ amount: number }> = JSON.parse(raw);
-    return items.reduce((s, it) => s + (Number(it?.amount) || 0), 0);
-  } catch {
-    return 0;
+  async function loadImportedIncomes() {
+    try {
+      const arr = await loadImportedIncomesForYear(year);
+      setImportedItems(arr);
+      const sum = arr.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+      setImportedTotal(sum);
+    } catch (e) {
+      console.warn("loadImportedIncomes:", e);
+      setImportedItems([]);
+      setImportedTotal(0);
+    }
   }
-}
 
-// ────────────────────────────────────────────────────────────────────────────────
-export default function CreateTaxScreen() {
-  const [lng, setLng] = useState<Locale>("bg");
-  const [state, setState] = useState<FormState>({
-    year: String(new Date().getFullYear()),
-    totalIncome: 0,
-    normExpensePct: 0,
-    insurances: 0,
-    otherReliefs: 0,
-    taxRatePct: 10,
-    withheldAdvance: 0,
-    note: "",
-  });
+  function parseNumber(v: string) {
+    const n = Number(String(v).replace(",", "."));
+    return Number.isFinite(n) ? n : 0;
+  }
 
-  // Локализация: еднократно + live
-  useEffect(() => {
-    let unsub = () => {};
-    (async () => {
-      const cur = await getLocale();
-      setLng(cur);
-      unsub = onLocaleChange(setLng);
-    })();
-    return () => unsub();
-  }, []);
+  const income = useMemo(() => {
+    const m = parseNumber(manualIncome);
+    return m > 0 ? m : importedTotal;
+  }, [manualIncome, importedTotal]);
 
-  // Хидратиране от локално състояние
-  useEffect(() => {
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) setState((s) => ({ ...s, ...(JSON.parse(raw) as FormState) }));
-      } catch {}
-    })();
-  }, []);
-  useEffect(() => {
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state)).catch(() => {});
-  }, [state]);
+  const normativeAmount = useMemo(() => (income * parseNumber(normativePercent)) / 100, [income, normativePercent]);
+  const socialAmount = useMemo(() => (income * parseNumber(socialPercent)) / 100, [income, socialPercent]);
+  const taxableIncome = useMemo(() => {
+    const base = income - normativeAmount - socialAmount - parseNumber(deductions);
+    return base > 0 ? Math.round(base * 100) / 100 : 0;
+  }, [income, normativeAmount, socialAmount, deductions]);
+  const tax = useMemo(() => Math.round(taxableIncome * TAX_RATE * 100) / 100, [taxableIncome]);
+  const netIncome = useMemo(() => Math.round((income - tax - socialAmount) * 100) / 100, [income, tax, socialAmount]);
 
-  // Етикети
-  const L = useMemo(() => {
-    return {
-      title: lng === "bg" ? "Данъчен калкулатор" : "Tax calculator",
-      year: lng === "bg" ? "Година" : "Year",
-      totalIncome: lng === "bg" ? "Общ доход" : "Total income",
-      getFromCsv: lng === "bg" ? "Вземи доходи (CSV)" : "Fetch incomes (CSV)",
-      normPct: lng === "bg" ? "Нормативни разходи (%)" : "Normative expenses (%)",
-      insurances: lng === "bg" ? "Осигуровки (сума)" : "Insurances (sum)",
-      reliefs: lng === "bg" ? "Други облекчения (сума)" : "Other reliefs (sum)",
-      taxRate: lng === "bg" ? "Ставка (%)" : "Rate (%)",
-      withheld: lng === "bg" ? "Авансово удържан" : "Withheld advance",
-      note: lng === "bg" ? "Бележка" : "Note",
-
-      base: lng === "bg" ? "Данъчна основа" : "Tax base",
-      tax: lng === "bg" ? "Данък" : "Tax",
-      payback: lng === "bg" ? "За доплащане / възстановяване" : "To pay / refund",
-
-      preview: lng === "bg" ? "Преглед" : "Preview",
-      generatePdf: lng === "bg" ? "Генерирай PDF" : "Generate PDF",
-      exportXlsx: lng === "bg" ? "Експорт в Excel" : "Export to Excel",
-      saved: lng === "bg" ? "Записано" : "Saved",
-      pdfDone: lng === "bg" ? "PDF е готов" : "PDF is ready",
-      shareUnsupported: lng === "bg" ? "Споделянето не се поддържа." : "Sharing is not supported.",
-      fetched: lng === "bg" ? "Импорт" : "Import",
-      fetchedMsg: (sum: number) =>
-        lng === "bg" ? `Намерен общ доход за ${state.year}: ${money(sum)} лв.` : `Total income for ${state.year}: ${money(sum)}`,
-      invalidNumber: lng === "bg" ? "Невалидно число" : "Invalid number",
-    };
-  }, [lng, state.year]);
-
-  // Изчисления
-  const calc = useMemo(() => {
-    const income = state.totalIncome;
-    const norm = clampMin0((state.normExpensePct / 100) * income);
-    const baseBefore = income - norm - state.insurances - state.otherReliefs;
-    const base = clampMin0(baseBefore);
-    const tax = clampMin0((state.taxRatePct / 100) * base);
-    const payback = tax - state.withheldAdvance; // >0 доплащане, <0 възстановяване
-    return { income, norm, base, tax, payback };
-  }, [state]);
-
-  // Обработчици
-  const setField = useCallback(<K extends keyof FormState>(k: K, v: FormState[K]) => {
-    setState((s) => ({ ...s, [k]: v }));
-  }, []);
-
-  const fetchIncomeFromCsv = useCallback(async () => {
-    const sum = await loadIncomeForYear(state.year);
-    setField("totalIncome", sum);
-    Alert.alert(L.fetched, L.fetchedMsg(sum));
-  }, [state.year, setField, L]);
-
-  const goIncomeScreen = useCallback(() => {
-    router.push("/income-sources");
-  }, []);
-
-  // PDF
-  const onGeneratePdf = useCallback(async () => {
-    const html = renderPdfHtml(L, state, calc, lng);
-    const { uri } = await Print.printToFileAsync({ html });
-    const target = FileSystem.documentDirectory + `etaxes-${state.year}-${Date.now()}.pdf`;
-    await FileSystem.copyAsync({ from: uri, to: target }).catch(() => {});
-    if (!(await Sharing.isAvailableAsync())) {
-      Alert.alert(L.pdfDone, L.shareUnsupported);
-      return;
+  function validateRequired() {
+    if (income <= 0) {
+      Alert.alert("Грешка", "Няма доход. Въведете доход или импортирайте записи за избраната година.");
+      return false;
     }
-    await Sharing.shareAsync(target);
-  }, [L, state, calc, lng]);
+    return true;
+  }
 
-  // XLSX
-  const onExportXlsx = useCallback(async () => {
-    const rows = [
-      { Field: L.year, Value: state.year },
-      { Field: L.totalIncome, Value: money(calc.income) },
-      { Field: L.normPct, Value: `${money(state.normExpensePct)} %` },
-      { Field: "Нормативни разходи / Norm", Value: money(calc.norm) },
-      { Field: L.insurances, Value: money(state.insurances) },
-      { Field: L.reliefs, Value: money(state.otherReliefs) },
-      { Field: L.taxRate, Value: `${money(state.taxRatePct)} %` },
-      { Field: L.base, Value: money(calc.base) },
-      { Field: L.tax, Value: money(calc.tax) },
-      { Field: L.withheld, Value: money(state.withheldAdvance) },
-      { Field: L.payback, Value: money(calc.payback) },
-      { Field: L.note, Value: state.note || "" },
-    ];
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Tax");
-    const wbout = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
-
-    const path = FileSystem.documentDirectory + `etaxes-${state.year}-${Date.now()}.xlsx`;
-    await FileSystem.writeAsStringAsync(path, wbout, { encoding: FileSystem.EncodingType.Base64 });
-
-    if (!(await Sharing.isAvailableAsync())) {
-      Alert.alert(L.saved, path);
-      return;
+  async function handleImportCsv() {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ type: ["text/csv", "text/*"], copyToCacheDirectory: true });
+      if (res.type !== "success" || !res.uri) {
+        return;
+      }
+      const content = await FileSystem.readAsStringAsync(res.uri, { encoding: FileSystem.EncodingType.UTF8 });
+      const sum = await parseAndStoreCsvText(content, year);
+      await loadImportedIncomes();
+      Alert.alert("CSV импорт", `Успешно импортнати записи. Сбор за ${year}: ${sum.toFixed(2)} лв.`);
+    } catch (e) {
+      console.warn("handleImportCsv:", e);
+      Alert.alert("Грешка", "Неуспешен импорт от CSV.");
     }
-    await Sharing.shareAsync(path);
-  }, [L, state, calc]);
+  }
 
-  // ──────────────────────────────────────────────────────────────────────────────
+  async function generatePdf() {
+    if (!validateRequired()) return;
+    const html = `
+      <html>
+        <body>
+          <h2>Преглед - декларация ${year}</h2>
+          <table>
+            <tr><td>Общ доход</td><td>${income.toFixed(2)} лв.</td></tr>
+            <tr><td>Нормативни разходи (${normativePercent} %)</td><td>${normativeAmount.toFixed(2)} лв.</td></tr>
+            <tr><td>Осигуровки (${socialPercent} %)</td><td>${socialAmount.toFixed(2)} лв.</td></tr>
+            <tr><td>Облекчения</td><td>${parseNumber(deductions).toFixed(2)} лв.</td></tr>
+            <tr><td>Облагаем доход</td><td>${taxableIncome.toFixed(2)} лв.</td></tr>
+            <tr><td>Данък (10%)</td><td>${tax.toFixed(2)} лв.</td></tr>
+            <tr><td>Нетен доход</td><td>${netIncome.toFixed(2)} лв.</td></tr>
+          </table>
+        </body>
+      </html>
+    `;
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      setLastExportPath(uri);
+      await Sharing.shareAsync(uri);
+    } catch (e) {
+      console.warn("generatePdf:", e);
+      Alert.alert("Грешка", "Неуспешен експорт в PDF.");
+    }
+  }
+
+  async function generateXlsx() {
+    if (!validateRequired()) return;
+    try {
+      const wb = XLSX.utils.book_new();
+      const data = [
+        ["Поле", "Стойност"],
+        ["Година", year],
+        ["Общ доход", income],
+        [`Нормативни разходи (${normativePercent}%)`, normativeAmount],
+        [`Осигуровки (${socialPercent}%)`, socialAmount],
+        ["Облекчения", parseNumber(deductions)],
+        ["Облагаем доход", taxableIncome],
+        ["Данък (10%)", tax],
+        ["Нетен доход", netIncome],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      XLSX.utils.book_append_sheet(wb, ws, "Summary");
+      const wbout = XLSX.write(wb, { type: "binary", bookType: "xlsx" });
+
+      function s2ab(s: string) {
+        const buf = new ArrayBuffer(s.length);
+        const view = new Uint8Array(buf);
+        for (let i = 0; i !== s.length; ++i) view[i] = s.charCodeAt(i) & 0xff;
+        return buf;
+      }
+      const fileUri = `${FileSystem.cacheDirectory}declaration_${year}.xlsx`;
+      await FileSystem.writeAsStringAsync(fileUri, Buffer.from(s2ab(wbout)).toString("base64"), {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      setLastExportPath(fileUri);
+      await Sharing.shareAsync(fileUri);
+    } catch (e) {
+      console.warn("generateXlsx:", e);
+      Alert.alert("Грешка", "Неуспешен експорт в XLSX.");
+    }
+  }
+
+  async function saveSnapshotToArchive() {
+    if (!validateRequired()) return;
+    try {
+      const record = {
+        id: `${Date.now()}`,
+        title: `Декларация ${year}`,
+        createdAt: new Date().toISOString(),
+        payload: {
+          year,
+          income,
+          normativePercent,
+          socialPercent,
+          deductions,
+          tax,
+        },
+      };
+      const raw = (await AsyncStorage.getItem("archive")) || "[]";
+      const arr = JSON.parse(raw);
+      arr.unshift(record);
+      await AsyncStorage.setItem("archive", JSON.stringify(arr));
+      Alert.alert("Запазено", "Данните бяха записани в Архива.");
+    } catch (e) {
+      console.warn("saveSnapshotToArchive:", e);
+      Alert.alert("Грешка", "Неуспешно запазване в Архива.");
+    }
+  }
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.select({ ios: "padding", android: undefined })}
-      style={{ flex: 1 }}
-    >
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>{L.title}</Text>
+    <KeyboardAvoidingView behavior={Platform.select({ ios: "padding", android: undefined })} style={s.container}>
+      <ScrollView contentContainerStyle={s.inner}>
+        <Text style={s.title}>Калкулатор данък (MVP)</Text>
 
-        {/* Година */}
-        <View style={styles.row2}>
-          <View style={styles.col}>
-            <Text style={styles.label}>{L.year}</Text>
+        <Text style={s.label}>Година</Text>
+        <TextInput style={s.input} keyboardType="number-pad" value={year} onChangeText={setYear} />
+
+        <View style={s.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.label}>Ръчен доход (лв.)</Text>
             <TextInput
-              value={state.year}
-              onChangeText={(v) => setField("year", v.replace(/\D/g, "").slice(0, 4))}
-              keyboardType="number-pad"
-              style={styles.input}
-              placeholder="2025"
+              style={s.input}
+              keyboardType="numeric"
+              placeholder="1000.00"
+              value={manualIncome}
+              onChangeText={setManualIncome}
             />
           </View>
-          <View style={styles.col} />
-        </View>
-
-        {/* Общ доход + бутони */}
-        <Text style={styles.section}>{L.totalIncome}</Text>
-        <View style={styles.row2}>
-          <View style={styles.col}>
-            <TextInput
-              value={String(state.totalIncome || "")}
-              onChangeText={(v) => setField("totalIncome", num(v))}
-              keyboardType="decimal-pad"
-              style={styles.input}
-              placeholder="0.00"
-            />
+          <View style={{ width: 12 }} />
+          <View style={{ width: 120, justifyContent: "flex-end" }}>
+            <Text style={s.label}>Импорт</Text>
+            <TouchableOpacity style={s.btn} onPress={loadImportedIncomes}>
+              <Text style={s.btnText}>Обнови</Text>
+            </TouchableOpacity>
           </View>
         </View>
-        <View style={styles.row2}>
-          <TouchableOpacity style={styles.linkBtn} onPress={goIncomeScreen}>
-            <Text style={styles.linkBtnText}>↗ {L.getFromCsv}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.linkBtn} onPress={fetchIncomeFromCsv}>
-            <Text style={styles.linkBtnText}>⟳ {L.getFromCsv}</Text>
+
+        <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
+          <TouchableOpacity style={s.csvBtn} onPress={handleImportCsv}>
+            <Text style={s.btnText}>Импорт CSV</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Параметри */}
-        <Text style={styles.section}>{L.normPct}</Text>
-        <TextInput
-          value={String(state.normExpensePct)}
-          onChangeText={(v) => {
-            const n = num(v);
-            if (n < 0 || n > 100) return Alert.alert(L.invalidNumber);
-            setField("normExpensePct", n);
-          }}
-          keyboardType="decimal-pad"
-          style={styles.input}
-          placeholder="0, 25, 40…"
-        />
+        <Text style={s.small}>Импортиран сбор: {importedTotal.toFixed(2)} лв.</Text>
 
-        <Text style={styles.section}>{L.insurances}</Text>
-        <TextInput
-          value={String(state.insurances)}
-          onChangeText={(v) => setField("insurances", num(v))}
-          keyboardType="decimal-pad"
-          style={styles.input}
-          placeholder="0.00"
-        />
-
-        <Text style={styles.section}>{L.reliefs}</Text>
-        <TextInput
-          value={String(state.otherReliefs)}
-          onChangeText={(v) => setField("otherReliefs", num(v))}
-          keyboardType="decimal-pad"
-          style={styles.input}
-          placeholder="0.00"
-        />
-
-        <Text style={styles.section}>{L.taxRate}</Text>
-        <TextInput
-          value={String(state.taxRatePct)}
-          onChangeText={(v) => {
-            const n = num(v);
-            if (n < 0 || n > 100) return Alert.alert(L.invalidNumber);
-            setField("taxRatePct", n);
-          }}
-          keyboardType="decimal-pad"
-          style={styles.input}
-          placeholder="10"
-        />
-
-        <Text style={styles.section}>{L.withheld}</Text>
-        <TextInput
-          value={String(state.withheldAdvance)}
-          onChangeText={(v) => setField("withheldAdvance", num(v))}
-          keyboardType="decimal-pad"
-          style={styles.input}
-          placeholder="0.00"
-        />
-
-        <Text style={styles.section}>{L.note}</Text>
-        <TextInput
-          value={state.note}
-          onChangeText={(v) => setField("note", v)}
-          style={styles.input}
-          placeholder={L.note}
-        />
-
-        {/* Преглед */}
-        <Text style={[styles.section, { marginTop: 16 }]}>{L.preview}</Text>
-        <View style={styles.summary}>
-          <Row label={L.totalIncome} value={money(calc.income)} />
-          <Row label={`${L.normPct}`} value={`${money(state.normExpensePct)} %`} />
-          <Row label={"Нормативни разходи / Norm"} value={money(calc.norm)} />
-          <Row label={L.insurances} value={money(state.insurances)} />
-          <Row label={L.reliefs} value={money(state.otherReliefs)} />
-          <Row label={L.base} value={money(calc.base)} />
-          <Row label={`${L.tax} (${money(state.taxRatePct)}%)`} value={money(calc.tax)} />
-          <Row label={L.withheld} value={money(state.withheldAdvance)} />
-          <Row label={L.payback} value={money(calc.payback)} bold />
+        {/* UI preview на импортнатите записи */}
+        <View style={{ marginTop: 8 }}>
+          <Text style={{ fontWeight: "600", marginBottom: 6 }}>Преглед на импортирани записи ({importedItems.length})</Text>
+          <FlatList
+            data={importedItems}
+            keyExtractor={(i) => i.id}
+            renderItem={({ item }) => (
+              <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 6 }}>
+                <Text>{item.description}</Text>
+                <Text>{Number(item.amount).toFixed(2)} лв.</Text>
+              </View>
+            )}
+            ListEmptyComponent={<Text style={{ color: "#666" }}>Няма импортирани записи</Text>}
+            style={{ maxHeight: 220, marginBottom: 8 }}
+          />
         </View>
 
-        {/* Действия */}
-        <View style={styles.actions}>
-          <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={onGeneratePdf}>
-            <Text style={styles.btnText}>{L.generatePdf}</Text>
+        <Text style={s.label}>Нормативни разходи (%)</Text>
+        <TextInput style={s.input} keyboardType="numeric" value={normativePercent} onChangeText={setNormativePercent} />
+
+        <Text style={s.label}>Осигуровки (%)</Text>
+        <TextInput style={s.input} keyboardType="numeric" value={socialPercent} onChangeText={setSocialPercent} />
+
+        <Text style={s.label}>Облекчения (лв.)</Text>
+        <TextInput style={s.input} keyboardType="numeric" value={deductions} onChangeText={setDeductions} />
+
+        <View style={s.divider} />
+
+        <Text style={s.label}>Резултат</Text>
+        <View style={s.rowBlock}>
+          <Text>Общ доход: {income.toFixed(2)} лв.</Text>
+          <Text>Нормативни: {normativeAmount.toFixed(2)} лв.</Text>
+          <Text>Осигуровки: {socialAmount.toFixed(2)} лв.</Text>
+          <Text>Облекчения: {parseNumber(deductions).toFixed(2)} лв.</Text>
+          <Text>Облагаем доход: {taxableIncome.toFixed(2)} лв.</Text>
+          <Text>Данък (10%): {tax.toFixed(2)} лв.</Text>
+          <Text>Нетно: {netIncome.toFixed(2)} лв.</Text>
+        </View>
+
+        <View style={s.actions}>
+          <TouchableOpacity style={s.actionBtn} onPress={generatePdf}>
+            <Text style={s.actionText}>Експорт PDF</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn]} onPress={onExportXlsx}>
-            <Text style={styles.btnText}>{L.exportXlsx}</Text>
+          <TouchableOpacity style={s.actionBtn} onPress={generateXlsx}>
+            <Text style={s.actionText}>Експорт XLSX</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: 24 }} />
+        <View style={s.actions}>
+          <TouchableOpacity style={s.actionBtnAlt} onPress={saveSnapshotToArchive}>
+            <Text style={s.actionTextAlt}>Запази в Архив</Text>
+          </TouchableOpacity>
+        </View>
+
+        {lastExportPath ? (
+          <Text style={s.small}>Последен експорт: {lastExportPath}</Text>
+        ) : (
+          <Text style={s.small}>Няма експортиран файл</Text>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-// Ред за преглед
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <View style={styles.row}>
-      <Text style={[styles.rowLabel, bold && styles.bold]}>{label}</Text>
-      <Text style={[styles.rowValue, bold && styles.bold]}>{value}</Text>
-    </View>
-  );
-}
-
-// PDF HTML
-function renderPdfHtml(
-  L: Record<string, any>,
-  s: FormState,
-  c: { income: number; norm: number; base: number; tax: number; payback: number },
-  lng: Locale
-) {
-  return `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<title>${L.title}</title>
-<style>
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;padding:24px;}
-h1{font-size:20px;margin:0 0 12px;}
-table{width:100%;border-collapse:collapse;margin-top:12px;}
-th,td{border:1px solid #ddd;padding:8px;font-size:12px;}
-th{background:#f7f7f7;text-align:left;}
-.row{display:flex;justify-content:space-between;margin:4px 0}
-.bold{font-weight:700}
-.small{opacity:.7;font-size:12px}
-</style>
-</head>
-<body>
-  <h1>${L.title}</h1>
-  <div class="small">${L.year}: ${s.year}</div>
-  <div class="small">${L.note}: ${escapeHtml(s.note || "")}</div>
-
-  <table>
-    <tbody>
-      <tr><th>${L.totalIncome}</th><td>${money(c.income)}</td></tr>
-      <tr><th>${L.normPct}</th><td>${money(s.normExpensePct)} %</td></tr>
-      <tr><th>Нормативни разходи / Norm</th><td>${money(c.norm)}</td></tr>
-      <tr><th>${L.insurances}</th><td>${money(s.insurances)}</td></tr>
-      <tr><th>${L.reliefs}</th><td>${money(s.otherReliefs)}</td></tr>
-      <tr><th>${L.base}</th><td>${money(c.base)}</td></tr>
-      <tr><th>${L.tax} (${money(s.taxRatePct)}%)</th><td>${money(c.tax)}</td></tr>
-      <tr><th>${L.withheld}</th><td>${money(s.withheldAdvance)}</td></tr>
-      <tr><th>${L.payback}</th><td>${money(c.payback)}</td></tr>
-    </tbody>
-  </table>
-</body>
-</html>`;
-}
-function escapeHtml(x: string) {
-  return x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-// ────────────────────────────────────────────────────────────────────────────────
-// Стилове
-const styles = StyleSheet.create({
-  container: { padding: 16 },
-  title: { fontSize: 20, fontWeight: "700", marginBottom: 8, textAlign: "center" },
-
-  section: { marginTop: 14, marginBottom: 6, fontSize: 15, fontWeight: "700" },
-  label: { fontSize: 12, opacity: 0.8, marginBottom: 4 },
-
-  row: { flexDirection: "row", justifyContent: "space-between", marginVertical: 2 },
-  rowLabel: { fontSize: 14 },
-  rowValue: { fontSize: 14 },
-  bold: { fontWeight: "700" },
-
-  row2: { flexDirection: "row", gap: 12, alignItems: "flex-end" },
-
-  col: { flex: 1 },
-
+const s = StyleSheet.create({
+  container: { flex: 1 },
+  inner: { padding: 16, gap: 12 },
+  title: { fontSize: 18, fontWeight: "600", marginBottom: 6 },
+  label: { marginTop: 6, marginBottom: 4, fontWeight: "600" },
   input: {
     borderWidth: 1,
-    borderColor: "#d0d0d0",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    backgroundColor: "#fff",
+    borderColor: "#ddd",
+    padding: 8,
+    borderRadius: 6,
   },
-
-  summary: {
-    borderWidth: 1,
-    borderColor: "#e5e5e5",
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: "#fff",
-  },
-
-  actions: { flexDirection: "row", gap: 12, marginTop: 14 },
   btn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#c8c8c8",
+    backgroundColor: "#2e7d32",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
     alignItems: "center",
   },
-  btnPrimary: { backgroundColor: "#e8f3ff", borderColor: "#a0c8ff" },
-  btnText: { fontSize: 14, fontWeight: "700" },
-
-  linkBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#c8c8c8",
+  csvBtn: {
+    backgroundColor: "#4caf50",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
     alignItems: "center",
-    backgroundColor: "#f7faff",
-    marginTop: 6,
   },
-  linkBtnText: { fontSize: 13, fontWeight: "700" },
+  btnText: { color: "#fff", fontWeight: "600" },
+  small: { color: "#333", marginTop: 6 },
+  divider: { height: 1, backgroundColor: "#eee", marginVertical: 8 },
+  row: { flexDirection: "row", alignItems: "flex-end" },
+  rowBlock: { gap: 6, padding: 8, backgroundColor: "#fafafa", borderRadius: 6 },
+  actions: { flexDirection: "row", gap: 12, marginTop: 12 },
+  actionBtn: {
+    backgroundColor: "#1e88e5",
+    padding: 10,
+    borderRadius: 6,
+    flex: 1,
+    alignItems: "center",
+  },
+  actionText: { color: "#fff", fontWeight: "600" },
+  actionBtnAlt: {
+    borderWidth: 1,
+    borderColor: "#666",
+    padding: 10,
+    borderRadius: 6,
+    flex: 1,
+    alignItems: "center",
+  },
+  actionTextAlt: { color: "#333", fontWeight: "600" },
 });
