@@ -39,3 +39,7 @@ describe("SubmitScreen", () => {
     expect(btn).toBeTruthy();
   });
 });
+<<<<<<< HEAD
+=======
+
+>>>>>>> restore/all

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <<<<<<< HEAD
+<<<<<<< HEAD
 <coverage generated="1761133543684" clover="3.2.0">
   <project timestamp="1761133543684" name="All files">
     <metrics statements="469" coveredstatements="25" conditionals="591" coveredconditionals="17" methods="143" coveredmethods="8" elements="1203" coveredelements="50" complexity="0" loc="469" ncloc="469" packages="6" files="23" classes="23"/>
@@ -377,6 +378,8 @@
       <file name="validators.ts" path="D:\projects\etaxes\src\lib\validators.ts">
         <metrics statements="23" coveredstatements="0" conditionals="17" coveredconditionals="0" methods="6" coveredmethods="0"/>
 =======
+=======
+>>>>>>> restore/all
 <coverage generated="1758132099959" clover="3.2.0">
   <project timestamp="1758132099959" name="All files">
     <metrics statements="167" coveredstatements="70" conditionals="169" coveredconditionals="57" methods="29" coveredmethods="14" elements="365" coveredelements="141" complexity="0" loc="167" ncloc="167" packages="4" files="7" classes="7"/>
@@ -555,7 +558,10 @@
       </file>
       <file name="validators.ts" path="D:\projects\etaxes\src\lib\validators.ts">
         <metrics statements="23" coveredstatements="10" conditionals="17" coveredconditionals="6" methods="6" coveredmethods="4"/>
+<<<<<<< HEAD
 >>>>>>> 812ffc7 (pre-upgrade backup)
+=======
+>>>>>>> restore/all
         <line num="7" count="0" type="cond" truecount="0" falsecount="2"/>
         <line num="8" count="0" type="stmt"/>
         <line num="10" count="0" type="cond" truecount="0" falsecount="2"/>
@@ -569,6 +575,7 @@
         <line num="24" count="0" type="stmt"/>
         <line num="25" count="0" type="stmt"/>
         <line num="27" count="0" type="stmt"/>
+<<<<<<< HEAD
 <<<<<<< HEAD
         <line num="31" count="0" type="cond" truecount="0" falsecount="2"/>
         <line num="32" count="0" type="stmt"/>
@@ -739,6 +746,8 @@
         <line num="77" count="0" type="stmt"/>
         <line num="78" count="0" type="cond" truecount="0" falsecount="2"/>
 =======
+=======
+>>>>>>> restore/all
         <line num="31" count="2" type="cond" truecount="1" falsecount="1"/>
         <line num="32" count="2" type="stmt"/>
         <line num="33" count="2" type="cond" truecount="1" falsecount="1"/>
@@ -749,7 +758,10 @@
         <line num="39" count="2" type="cond" truecount="1" falsecount="1"/>
         <line num="40" count="2" type="stmt"/>
         <line num="44" count="3" type="cond" truecount="3" falsecount="0"/>
+<<<<<<< HEAD
 >>>>>>> 812ffc7 (pre-upgrade backup)
+=======
+>>>>>>> restore/all
       </file>
     </package>
   </project>

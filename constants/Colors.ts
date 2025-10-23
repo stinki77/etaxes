@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 const tintColorLight = '#2f95dc';
+=======
+﻿const tintColorLight = '#2f95dc';
+>>>>>>> restore/all
 const tintColorDark = '#fff';
 
 export default {
