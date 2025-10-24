@@ -144,10 +144,7 @@ const s = StyleSheet.create({
 
   next: { marginTop: 8, paddingVertical: 12, borderRadius: 10, alignItems: "center", backgroundColor: "#e8f3ff", borderWidth: 1, borderColor: "#a0c8ff" },
   nextText: { fontSize: 14, fontWeight: "700" },
-<<<<<<< HEAD
-=======
 
   // добавен липсващ стил
   stack: { gap: 8 },
->>>>>>> restore/all
 });

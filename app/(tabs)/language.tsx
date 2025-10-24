@@ -1,14 +1,3 @@
-<<<<<<< HEAD
-﻿import React from 'react';
-import { View, Text } from 'react-native';
-export default function Language(){
-  return (
-    <View style={{flex:1,alignItems:'center',justifyContent:'center'}}>
-      <Text style={{fontSize:20,fontWeight:'700'}}>Език</Text>
-    </View>
-  );
-}
-=======
 ﻿// app/(tabs)/language.tsx
 import React, { useCallback, useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -79,4 +68,3 @@ const styles = StyleSheet.create({
   currentLabel: { fontSize: 12, color: "#444" },
   currentValue: { fontSize: 18, fontWeight: "700", marginTop: 4 },
 });
->>>>>>> restore/all

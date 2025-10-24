@@ -1,24 +1,3 @@
-<<<<<<< HEAD
-/**
- * Прост XML генератор за декларация към НАП.
- * Този модул генерира валиден UTF-8 XML стринг с базови namespaces.
- *
- * IMPORTANT:
- * - Прегледайте и адаптирайте имената на елементи, namespaces и структурите според официалната XSD/спецификация на НАП.
- * - Тук използвам ръчно ескейпване. За production използвайте XML библиотека (xmlbuilder2, fast-xml-builder) и валидирайте срещу XSD.
- */
-
-type IncomeLine = {
-  code: string;
-  description?: string;
-  amount: number;
-};
-
-type Payload = {
-  meta: { generatedAt: string; app?: string; version?: string };
-  taxpayer: { egn: string };
-  payment: { iban: string; reason: string };
-=======
 // src/lib/napXml.ts
 /**
  * Генератор на XML за НАП + адаптер от store типове.
@@ -33,7 +12,6 @@ type Payload = {
   meta: { generatedAt: string; app?: string; version?: string };
   taxpayer: { egn?: string; lnch?: string };
   payment: { iban?: string; reason?: string };
->>>>>>> restore/all
   year: number | string;
   income?: IncomeLine[];
   deductions?: any[];
@@ -51,17 +29,6 @@ function esc(s: any) {
     .replace(/'/g, "&apos;");
 }
 
-<<<<<<< HEAD
-export function generateNapXml(payload: Payload): string {
-  // Basic namespaces used as example. Replace with actual НАП namespaces.
-  const ns = {
-    xsi: "http://www.w3.org/2001/XMLSchema-instance",
-    nap: "http://nap.bg/declaration",
-  };
-
-  const header = `<?xml version="1.0" encoding="UTF-8"?>`;
-  // Root element with namespaces
-=======
 function n2(v: any): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -75,7 +42,6 @@ function f2(v: any): string {
 export function generateNapXmlRaw(payload: Payload): string {
   const ns = { xsi: "http://www.w3.org/2001/XMLSchema-instance", nap: "http://nap.bg/declaration" };
   const header = `<?xml version="1.0" encoding="UTF-8"?>`;
->>>>>>> restore/all
   let xml = `${header}\n<nap:Declaration xmlns:nap="${ns.nap}" xmlns:xsi="${ns.xsi}">\n`;
 
   xml += `  <nap:Meta>\n`;
@@ -85,14 +51,6 @@ export function generateNapXmlRaw(payload: Payload): string {
   xml += `  </nap:Meta>\n`;
 
   xml += `  <nap:Taxpayer>\n`;
-<<<<<<< HEAD
-  xml += `    <nap:EGN>${esc(payload.taxpayer?.egn)}</nap:EGN>\n`;
-  xml += `  </nap:Taxpayer>\n`;
-
-  xml += `  <nap:Payment>\n`;
-  xml += `    <nap:IBAN>${esc(payload.payment?.iban)}</nap:IBAN>\n`;
-  xml += `    <nap:Reason>${esc(payload.payment?.reason)}</nap:Reason>\n`;
-=======
   if (payload.taxpayer?.egn) xml += `    <nap:EGN>${esc(payload.taxpayer.egn)}</nap:EGN>\n`;
   if (payload.taxpayer?.lnch) xml += `    <nap:LNCh>${esc(payload.taxpayer.lnch)}</nap:LNCh>\n`;
   xml += `  </nap:Taxpayer>\n`;
@@ -100,7 +58,6 @@ export function generateNapXmlRaw(payload: Payload): string {
   xml += `  <nap:Payment>\n`;
   xml += `    <nap:IBAN>${esc(payload.payment?.iban || "")}</nap:IBAN>\n`;
   xml += `    <nap:Reason>${esc(payload.payment?.reason || "")}</nap:Reason>\n`;
->>>>>>> restore/all
   xml += `  </nap:Payment>\n`;
 
   xml += `  <nap:Year>${esc(payload.year)}</nap:Year>\n`;
@@ -111,11 +68,7 @@ export function generateNapXmlRaw(payload: Payload): string {
       xml += `    <nap:Income>\n`;
       xml += `      <nap:Code>${esc(line.code)}</nap:Code>\n`;
       xml += `      <nap:Description>${esc(line.description || "")}</nap:Description>\n`;
-<<<<<<< HEAD
-      xml += `      <nap:Amount>${Number(line.amount).toFixed(2)}</nap:Amount>\n`;
-=======
       xml += `      <nap:Amount>${f2(line.amount)}</nap:Amount>\n`;
->>>>>>> restore/all
       xml += `    </nap:Income>\n`;
     }
     xml += `  </nap:IncomeList>\n`;
@@ -132,11 +85,7 @@ export function generateNapXmlRaw(payload: Payload): string {
   if (payload.totals) {
     xml += `  <nap:Totals>\n`;
     for (const k of Object.keys(payload.totals)) {
-<<<<<<< HEAD
-      xml += `    <nap:${esc(k)}>${Number(payload.totals[k]).toFixed(2)}</nap:${esc(k)}>\n`;
-=======
       xml += `    <nap:${esc(k)}>${f2(payload.totals[k])}</nap:${esc(k)}>\n`;
->>>>>>> restore/all
     }
     xml += `  </nap:Totals>\n`;
   }
@@ -156,9 +105,6 @@ export function generateNapXmlRaw(payload: Payload): string {
   return xml;
 }
 
-<<<<<<< HEAD
-// default export for convenience
-=======
 // -------- Адаптер: store -> Payload --------
 function incomeTypeToCode(t: Income["incomeType"] | undefined): string {
   // Подравнено към тестовете: employment -> "01"
@@ -229,5 +175,4 @@ export function generateNapXml(p: {
 }
 
 // default: удобен импорт
->>>>>>> restore/all
 export default generateNapXml;
