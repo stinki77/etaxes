@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import React from 'react';
-=======
 ﻿import React from 'react';
->>>>>>> restore/all
 import { StyleSheet } from 'react-native';
 
 import { ExternalLink } from './ExternalLink';

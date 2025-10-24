@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import type { PropsWithChildren, ReactElement } from 'react';
-=======
 ﻿import type { PropsWithChildren, ReactElement } from 'react';
->>>>>>> restore/all
 import { StyleSheet } from 'react-native';
 import Animated, {
   interpolate,
@@ -28,11 +24,7 @@ export default function ParallaxScrollView({
   headerBackgroundColor,
 }: Props) {
   const colorScheme = useColorScheme() ?? 'light';
-<<<<<<< HEAD
-  const scrollRef = useAnimatedRef<Animated.ScrollView>();
-=======
   const scrollRef = useAnimatedRef();
->>>>>>> restore/all
   const scrollOffset = useScrollViewOffset(scrollRef);
   const bottom = useBottomTabOverflow();
   const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -87,8 +79,4 @@ const styles = StyleSheet.create({
     gap: 16,
     overflow: 'hidden',
   },
-<<<<<<< HEAD
 });
-=======
-});
->>>>>>> restore/all

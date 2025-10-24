@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-import * as XLSX from "xlsx";
-=======
 ﻿import * as XLSX from "xlsx";
->>>>>>> restore/all
 import * as FileSystem from "expo-file-system";
 
 export type ExcelIncomeRow = {
@@ -17,13 +13,6 @@ export type ExcelPreview = {
   incomesTotal: number;
   deductionsTotal: number;
   taxableBase: number;
-<<<<<<< HEAD
-  taxRatePct: number;
-  taxDue: number;
-  createdAt?: string; // ISO (по избор)
-};
-
-=======
   taxRatePct: number; // e.g., 10 means 10%
   taxDue: number;
   createdAt?: string; // ISO
@@ -31,17 +20,11 @@ export type ExcelPreview = {
 
 type ReliefRow = { name?: string; amount?: number };
 
->>>>>>> restore/all
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
 function fileStamp(d = new Date()) {
-<<<<<<< HEAD
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(
-    d.getMinutes()
-  )}`;
-=======
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(
     d.getHours()
   )}${pad(d.getMinutes())}`;
@@ -58,7 +41,6 @@ function toCurrency(n: number) {
 
 function sum(vals: Array<number | undefined>) {
   return vals.reduce((s, v) => s + (Number.isFinite(v as number) ? (v as number) : 0), 0);
->>>>>>> restore/all
 }
 
 export async function makeExcel(
@@ -70,19 +52,11 @@ export async function makeExcel(
   // Лист 1: Обобщение
   const summaryAoA: (string | number)[][] = [
     ["Година", preview.year],
-<<<<<<< HEAD
-    ["Общо доходи", Number(preview.incomesTotal.toFixed(2))],
-    ["Облекчения", Number(preview.deductionsTotal.toFixed(2))],
-    ["Облагаема сума", Number(preview.taxableBase.toFixed(2))],
-    ["Ставка %", Number(preview.taxRatePct.toFixed(2))],
-    ["Дължим данък", Number(preview.taxDue.toFixed(2))],
-=======
     ["Общо доходи", toCurrency(preview.incomesTotal)],
     ["Облекчения", toCurrency(preview.deductionsTotal)],
     ["Облагаема сума", toCurrency(preview.taxableBase)],
     ["Ставка %", toCurrency(preview.taxRatePct)],
     ["Дължим данък", toCurrency(preview.taxDue)],
->>>>>>> restore/all
     ["Създадено", preview.createdAt ? preview.createdAt : new Date().toISOString()],
   ];
   const wsSummary = XLSX.utils.aoa_to_sheet([["Поле", "Стойност"], ...summaryAoA]);
@@ -94,11 +68,7 @@ export async function makeExcel(
       ["Описание", "Сума (лв.)", "Дата", "Включен"],
       ...incomes.map((r) => [
         r.description || "Доход",
-<<<<<<< HEAD
-        Number((r.amount || 0).toFixed(2)),
-=======
         toCurrency(r.amount || 0),
->>>>>>> restore/all
         r.date || "",
         r.include !== false,
       ]),
@@ -109,13 +79,6 @@ export async function makeExcel(
 
   const b64 = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
   const name = `eTaxes-${preview.year}-${fileStamp()}.xlsx`;
-<<<<<<< HEAD
-  const uri = (FileSystem.cacheDirectory || FileSystem.documentDirectory || "") + name;
-
-  await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
-  return { uri, name };
-}
-=======
   const dir = getWritableDir();
   const uri = dir + name;
 
@@ -219,4 +182,3 @@ export async function exportToXlsx(a: any, b?: any): Promise<string> {
   const { uri } = await makeExcel(preview, incomes);
   return uri;
 }
->>>>>>> restore/all

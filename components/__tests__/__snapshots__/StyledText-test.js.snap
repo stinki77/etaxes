@@ -1,10 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-<<<<<<< HEAD
-exports[`renders correctly 1`] = `
-=======
 exports[`MonoText renders correctly 1`] = `
->>>>>>> restore/all
 <Text
   style={
     [

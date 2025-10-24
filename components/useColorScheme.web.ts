@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-// NOTE: The default React Native styling doesn't support server rendering.
-=======
 ﻿// NOTE: The default React Native styling doesn't support server rendering.
->>>>>>> restore/all
 // Server rendered styles should not change between the first render of the HTML
 // and the first render on the client. Typically, web developers will use CSS media queries
 // to render different styles on the client and server, these aren't directly supported in React Native

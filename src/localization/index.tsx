@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-// src/localization/index.ts
-=======
 ﻿// src/localization/index.ts
->>>>>>> restore/all
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Localization from "expo-localization";
 
@@ -14,28 +10,13 @@ type Listener = (lng: Locale) => void;
 const listeners = new Set<Listener>();
 function emit(lng: Locale) {
   listeners.forEach((fn) => {
-<<<<<<< HEAD
-    try {
-      fn(lng);
-    } catch {
-      // ignore listener errors
-    }
-=======
     try { fn(lng); } catch {}
->>>>>>> restore/all
   });
 }
 
 /** Разпознава езика на устройството и свежда до "bg" или "en" */
 export function deviceLocale(): Locale {
-<<<<<<< HEAD
-  const tag =
-    Localization.locale ||
-    Localization.getLocales?.()[0]?.languageTag ||
-    "en-US";
-=======
   const tag = Localization.locale || Localization.getLocales?.()[0]?.languageTag || "en-US";
->>>>>>> restore/all
   return tag.toLowerCase().startsWith("bg") ? "bg" : "en";
 }
 
@@ -44,13 +25,7 @@ export async function getLocale(): Promise<Locale> {
   try {
     const saved = await AsyncStorage.getItem(STORAGE_KEY);
     if (saved === "bg" || saved === "en") return saved;
-<<<<<<< HEAD
-  } catch {
-    // ignore
-  }
-=======
   } catch {}
->>>>>>> restore/all
   return deviceLocale();
 }
 
@@ -60,11 +35,7 @@ export async function setLocale(lng: Locale): Promise<void> {
   emit(lng);
 }
 
-<<<<<<< HEAD
-/** Абониране за промяна на езика. Върни функция за отписване. */
-=======
 /** Абониране за промяна на езика. Връща функция за отписване. */
->>>>>>> restore/all
 export function onLocaleChange(cb: Listener): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);
@@ -76,10 +47,7 @@ const dict = {
     tabs: {
       dashboard: "Начало",
       createTax: "Създай данък",
-<<<<<<< HEAD
-=======
       declaration: "Декларация",
->>>>>>> restore/all
       archive: "Архив",
       calculators: "Калкулатори",
       notifications: "Известия",
@@ -92,45 +60,16 @@ const dict = {
       tip: "Съвет: промяната се отразява до 1 секунда.",
     },
     dashboard: {
-<<<<<<< HEAD
-      heading: "ЕДанъци",
-      sub: "Краен срок за ГДД: 30 април",
-    },
-    createTax: {
-      title: "Създай данък",
-=======
       heading: "еДанъци",
       sub: "Краен срок за ГДД: 30 април",
     },
     // стара секция за съвместимост
     createTax: {
       title: "Декларация",
->>>>>>> restore/all
       year: "Година",
       income: "Доходи",
       reliefs: "Облекчения",
       review: "Преглед",
-<<<<<<< HEAD
-      generatePdf: "Генерирай PDF",
-      exportXlsx: "Експорт в Excel",
-    },
-    archive: {
-      title: "Архив",
-      empty: "Няма записи",
-    },
-    calculators: {
-      title: "Калкулатори",
-    },
-    notifications: {
-      title: "Известия",
-    },
-    common: {
-      save: "Запази",
-      cancel: "Отказ",
-      ok: "Ок",
-      error: "Грешка",
-    },
-=======
       generatePdf: "Преглед за подаване (PDF)",
       exportXlsx: "Експорт (CSV/Excel)",
       errors: {
@@ -209,16 +148,12 @@ const dict = {
     calculators: { title: "Калкулатори" },
     notifications: { title: "Известия" },
     common: { save: "Запази", cancel: "Отказ", ok: "Ок", error: "Грешка" },
->>>>>>> restore/all
   },
   en: {
     tabs: {
       dashboard: "Dashboard",
       createTax: "Create tax",
-<<<<<<< HEAD
-=======
       declaration: "Declaration",
->>>>>>> restore/all
       archive: "Archive",
       calculators: "Calculators",
       notifications: "Notifications",
@@ -234,39 +169,13 @@ const dict = {
       heading: "eTaxes",
       sub: "Annual return deadline: April 30",
     },
-<<<<<<< HEAD
-    createTax: {
-      title: "Create tax",
-=======
     // legacy section kept
     createTax: {
       title: "Declaration",
->>>>>>> restore/all
       year: "Year",
       income: "Income",
       reliefs: "Reliefs",
       review: "Review",
-<<<<<<< HEAD
-      generatePdf: "Generate PDF",
-      exportXlsx: "Export to Excel",
-    },
-    archive: {
-      title: "Archive",
-      empty: "No records",
-    },
-    calculators: {
-      title: "Calculators",
-    },
-    notifications: {
-      title: "Notifications",
-    },
-    common: {
-      save: "Save",
-      cancel: "Cancel",
-      ok: "OK",
-      error: "Error",
-    },
-=======
       generatePdf: "Preview for filing (PDF)",
       exportXlsx: "Export (CSV/Excel)",
       errors: {
@@ -345,20 +254,13 @@ const dict = {
     calculators: { title: "Calculators" },
     notifications: { title: "Notifications" },
     common: { save: "Save", cancel: "Cancel", ok: "OK", error: "Error" },
->>>>>>> restore/all
   },
 } as const;
 
 /** Вътрешно: намира стойност по път с точки: "createTax.title" */
 function resolvePath<T extends object>(obj: T, path: string): unknown {
   return path.split(".").reduce<unknown>((acc, key) => {
-<<<<<<< HEAD
-    if (acc && typeof acc === "object" && key in (acc as any)) {
-      return (acc as any)[key];
-    }
-=======
     if (acc && typeof acc === "object" && key in (acc as any)) return (acc as any)[key];
->>>>>>> restore/all
     return undefined;
   }, obj);
 }
@@ -366,53 +268,6 @@ function resolvePath<T extends object>(obj: T, path: string): unknown {
 /** Шаблонизиране: заменя {{key}} с params.key */
 function formatTemplate(str: string, params?: Record<string, string | number>) {
   if (!params) return str;
-<<<<<<< HEAD
-  return str.replace(/\{\{(\w+)\}\}/g, (_, k) =>
-    params[k] != null ? String(params[k]) : `{{${k}}}`
-  );
-}
-
-/**
- * t("createTax.title") -> локализиран низ.
- * Поддържа params: t("common.error", { code: 404 })
- */
-export async function t(
-  key: string,
-  params?: Record<string, string | number>
-): Promise<string> {
-  const lng = await getLocale();
-  const table = dict[lng];
-  const val = resolvePath(table, key);
-  if (typeof val === "string") {
-    return formatTemplate(val, params);
-  }
-  // Fallback: опитай английски
-  const fallback = resolvePath(dict.en, key);
-  if (typeof fallback === "string") {
-    return formatTemplate(fallback, params);
-  }
-  return key; // последен fallback: върни ключа
-}
-
-/** Синхронен вариант за вече известен език (ако го пазиш в state) */
-export function tSync(
-  lng: Locale,
-  key: string,
-  params?: Record<string, string | number>
-): string {
-  const table = dict[lng];
-  const val = resolvePath(table, key);
-  if (typeof val === "string") return formatTemplate(val, params);
-  const fallback = resolvePath(dict.en, key);
-  if (typeof fallback === "string") return formatTemplate(fallback, params);
-  return key;
-}
-
-/** Хелпър: вземи текущи таб заглавия синхронно за даден език */
-export function tabTitles(lng: Locale) {
-  return dict[lng].tabs;
-}
-=======
   return str.replace(/\{\{(\w+)\}\}/g, (_, k) => (params[k] != null ? String(params[k]) : `{{${k}}}`));
 }
 
@@ -440,4 +295,3 @@ export function tabTitles(lng: Locale) {
   return dict[lng].tabs;
 }
 
->>>>>>> restore/all
